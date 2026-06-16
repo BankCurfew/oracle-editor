@@ -62,9 +62,11 @@ export function ChatTerminal() {
   useEffect(() => {
     if (!containerRef.current || termRef.current) return;
 
+    const isMobile = window.innerWidth < 768;
     const term = new Terminal({
       cursorBlink: true,
-      fontSize: 13,
+      fontSize: isMobile ? 10 : 13,
+      lineHeight: isMobile ? 1.2 : 1,
       fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
       theme: {
         background: "#09090b",
