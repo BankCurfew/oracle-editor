@@ -37,9 +37,15 @@ export function ChatTerminal() {
     onMessage,
     onOpen: () => {
       setWsConnected(true);
-      const cols = termRef.current?.cols || 120;
-      const rows = termRef.current?.rows || 40;
+      // Fit first, then attach with actual dimensions
+      fitRef.current?.fit();
+      const cols = termRef.current?.cols || 80;
+      const rows = termRef.current?.rows || 24;
       send(JSON.stringify({ type: "attach", target: ptyTarget, cols, rows }));
+      // Send resize after attach to sync tmux
+      setTimeout(() => {
+        send(JSON.stringify({ type: "resize", cols, rows }));
+      }, 600);
     },
     onClose: () => setWsConnected(false),
   });

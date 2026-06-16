@@ -49,7 +49,9 @@ function attach(ws: WsLike, target: string, cols: number, rows: number) {
       clearTimeout(session.cleanupTimer);
       session.cleanupTimer = null;
     }
-    ws.send(JSON.stringify({ type: "attached", target: safe, reused: true }));
+    // Resize to new viewer's dimensions
+    session.proc.resize(cols, rows);
+    ws.send(JSON.stringify({ type: "attached", target: safe, reused: true, cols, rows }));
     return;
   }
 
@@ -60,8 +62,8 @@ function attach(ws: WsLike, target: string, cols: number, rows: number) {
     return;
   }
 
-  // Spawn real PTY → tmux attach
-  const proc = pty.spawn("tmux", ["attach-session", "-t", safe], {
+  // Spawn real PTY → tmux attach -d (detach other clients so our size wins)
+  const proc = pty.spawn("tmux", ["attach-session", "-d", "-t", safe], {
     name: "xterm-256color",
     cols,
     rows,
@@ -71,6 +73,15 @@ function attach(ws: WsLike, target: string, cols: number, rows: number) {
 
   const session: PtySession = { proc, target: safe, viewers: new Set([ws]), cleanupTimer: null };
   sessions.set(safe, session);
+
+  // Force resize + clear after attach to sync terminal state
+  setTimeout(() => {
+    proc.resize(cols, rows);
+    // Clear screen + reset scroll region + redraw
+    proc.write("\x1b[2J\x1b[H\x1b[r");
+    // Tell tmux to refresh
+    proc.write("tmux refresh-client\r");
+  }, 500);
 
   // Stream PTY output → all viewers
   proc.onData((data: string) => {
@@ -94,7 +105,7 @@ function attach(ws: WsLike, target: string, cols: number, rows: number) {
     console.log(`[pty] session ended: ${safe}`);
   });
 
-  ws.send(JSON.stringify({ type: "attached", target: safe, reused: false }));
+  ws.send(JSON.stringify({ type: "attached", target: safe, reused: false, cols, rows }));
   console.log(`[pty] attached to tmux session: ${safe} (${cols}x${rows})`);
 }
 
