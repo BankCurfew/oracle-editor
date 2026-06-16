@@ -1,9 +1,11 @@
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { useWebSocket } from "./useWebSocket";
 import { useEditorStore } from "./store";
+
+const IS_MOBILE = typeof navigator !== "undefined" && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
 export function ChatTerminal() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -105,15 +107,62 @@ export function ChatTerminal() {
     };
   }, [send]);
 
+  // Mobile input box state
+  const [mobileInput, setMobileInput] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleMobileSend = () => {
+    if (!mobileInput.trim()) return;
+    const encoder = new TextEncoder();
+    // Send each character + Enter
+    send(encoder.encode(mobileInput));
+    send(encoder.encode("\r"));
+    setMobileInput("");
+    inputRef.current?.focus();
+  };
+
+  // Desktop: tap terminal container to focus xterm
+  const handleContainerClick = () => {
+    termRef.current?.focus();
+  };
+
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center gap-2 px-3 py-1.5 bg-zinc-900 border-b border-zinc-800 text-xs text-zinc-400">
         <span className="font-medium text-zinc-200">Oracle Chat</span>
         <span className="text-zinc-600">|</span>
-        <span>tmux: {ptyTarget}</span>
+        <span className="truncate">tmux: {ptyTarget}</span>
         <ConnectionDot />
       </div>
-      <div ref={containerRef} className="flex-1 min-h-0" />
+      <div
+        ref={containerRef}
+        className="flex-1 min-h-0 cursor-text"
+        onClick={handleContainerClick}
+      />
+      {/* Mobile input box — iOS Safari can't focus xterm textarea */}
+      {IS_MOBILE && (
+        <div className="flex items-center gap-2 px-2 py-2 bg-zinc-900 border-t border-zinc-800 shrink-0">
+          <input
+            ref={inputRef}
+            type="text"
+            value={mobileInput}
+            onChange={(e) => setMobileInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") handleMobileSend(); }}
+            placeholder="Type command..."
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck={false}
+            className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 outline-none focus:border-violet-500 min-h-[44px]"
+          />
+          <button
+            onClick={handleMobileSend}
+            className="bg-violet-600 text-white rounded-lg px-4 py-2 text-sm font-medium min-h-[44px] min-w-[44px] active:bg-violet-700"
+          >
+            Send
+          </button>
+        </div>
+      )}
     </div>
   );
 }
