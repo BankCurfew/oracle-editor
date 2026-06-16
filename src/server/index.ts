@@ -12,8 +12,8 @@
  */
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { serve } from "@hono/node-server";
-import { WebSocketServer, WebSocket } from "ws";
+import { getRequestListener } from "@hono/node-server";
+import { WebSocketServer } from "ws";
 import { createServer } from "node:http";
 import { execSync } from "node:child_process";
 import { resolve, extname } from "node:path";
@@ -82,10 +82,8 @@ app.get("/api/file/raw", async (c) => {
 // Start file watcher
 startFileWatcher(WORKSPACE);
 
-// Create HTTP server from Hono
-const httpServer = createServer(serve({ fetch: app.fetch, port: PORT }).server ? undefined : app.fetch as any);
-
-// WebSocket server on same HTTP server
+// Single HTTP server — Hono handler + WebSocket upgrade
+const httpServer = createServer(getRequestListener(app.fetch));
 const wss = new WebSocketServer({ noServer: true });
 
 httpServer.on("upgrade", (req, socket, head) => {
@@ -130,10 +128,10 @@ wss.on("connection", (ws) => {
   });
 });
 
-// Start with @hono/node-server
-const server = serve({ fetch: app.fetch, port: PORT, createServer: () => httpServer });
-
-console.log(`🔧 Oracle Editor server on http://localhost:${PORT}`);
+// Single listen — no double bind
+httpServer.listen(PORT, () => {
+  console.log(`🔧 Oracle Editor server on http://localhost:${PORT}`);
 console.log(`   workspace: ${WORKSPACE}`);
 console.log(`   ws://localhost:${PORT}/ws/pty    — terminal`);
-console.log(`   ws://localhost:${PORT}/ws/files  — file watcher`);
+  console.log(`   ws://localhost:${PORT}/ws/files  — file watcher`);
+});
