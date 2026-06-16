@@ -10,7 +10,13 @@ export interface FileEntry {
   expanded?: boolean;
 }
 
+export type MobileTab = "chat" | "preview" | "files";
+
 interface EditorState {
+  /** Mobile tab */
+  activeTab: MobileTab;
+  setActiveTab: (tab: MobileTab) => void;
+
   /** File tree state */
   files: FileEntry[];
   setFiles: (files: FileEntry[]) => void;
@@ -38,6 +44,9 @@ interface EditorState {
 }
 
 export const useEditorStore = create<EditorState>((set) => ({
+  activeTab: "chat",
+  setActiveTab: (tab) => set({ activeTab: tab }),
+
   files: [],
   setFiles: (files) => set({ files }),
   toggleExpanded: (path) =>
@@ -48,7 +57,7 @@ export const useEditorStore = create<EditorState>((set) => ({
   selectedFile: null,
   selectFile: (path) => set({ selectedFile: path }),
 
-  ptyTarget: "oracle",
+  ptyTarget: new URLSearchParams(window.location.search).get("session") || "01-bob:0",
   setPtyTarget: (target) => set({ ptyTarget: target }),
 
   wsConnected: false,

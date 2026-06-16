@@ -2,7 +2,13 @@
 @import "@xterm/xterm/css/xterm.css";
 
 html, body, #root {
-  height: 100%;
+  height: 100dvh;
   margin: 0;
   overflow: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* iPhone Safari safe area for bottom tab bar */
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
