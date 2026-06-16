@@ -8,26 +8,28 @@
  * Binary frames = terminal data, JSON frames = control messages.
  */
 import * as pty from "node-pty";
-import type { ServerWebSocket } from "bun";
 import type { IPty } from "node-pty";
+
+/** Generic WebSocket interface — works with both ws and Bun */
+interface WsLike { send(data: string | Buffer): void; }
 
 interface PtySession {
   proc: IPty;
   target: string;
-  viewers: Set<ServerWebSocket<any>>;
+  viewers: Set<WsLike>;
   cleanupTimer: ReturnType<typeof setTimeout> | null;
 }
 
 const sessions = new Map<string, PtySession>();
 const CLEANUP_DELAY_MS = 5_000;
 
-function findSession(ws: ServerWebSocket<any>): PtySession | undefined {
+function findSession(ws: WsLike): PtySession | undefined {
   for (const s of sessions.values()) {
     if (s.viewers.has(ws)) return s;
   }
 }
 
-function attach(ws: ServerWebSocket<any>, target: string, cols: number, rows: number) {
+function attach(ws: WsLike, target: string, cols: number, rows: number) {
   const safe = target.replace(/[^a-zA-Z0-9\-_:.]/g, "");
   if (!safe) return;
 
@@ -83,13 +85,13 @@ function attach(ws: ServerWebSocket<any>, target: string, cols: number, rows: nu
   console.log(`[pty] attached to tmux session: ${safe} (${cols}x${rows})`);
 }
 
-function resize(ws: ServerWebSocket<any>, cols: number, rows: number) {
+function resize(ws: WsLike, cols: number, rows: number) {
   const session = findSession(ws);
   if (!session) return;
   session.proc.resize(cols, rows);
 }
 
-function detach(ws: ServerWebSocket<any>) {
+function detach(ws: WsLike) {
   const session = findSession(ws);
   if (!session) return;
   session.viewers.delete(ws);
@@ -103,7 +105,7 @@ function detach(ws: ServerWebSocket<any>) {
   }
 }
 
-export function handlePtyMessage(ws: ServerWebSocket<any>, msg: string | Buffer) {
+export function handlePtyMessage(ws: WsLike, msg: string | Buffer) {
   if (typeof msg !== "string") {
     // Binary → keystroke to PTY stdin
     const session = findSession(ws);
@@ -122,6 +124,6 @@ export function handlePtyMessage(ws: ServerWebSocket<any>, msg: string | Buffer)
   } catch {}
 }
 
-export function handlePtyClose(ws: ServerWebSocket<any>) {
+export function handlePtyClose(ws: WsLike) {
   detach(ws);
 }

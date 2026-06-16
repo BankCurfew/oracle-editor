@@ -6,9 +6,11 @@
  */
 import { watch, type FSWatcher } from "chokidar";
 import { relative } from "node:path";
-import type { ServerWebSocket } from "bun";
 
-const viewers = new Set<ServerWebSocket<any>>();
+/** Generic WebSocket interface — works with both ws and Bun */
+interface WsLike { send(data: string | Buffer): void; }
+
+const viewers = new Set<WsLike>();
 let watcher: FSWatcher | null = null;
 
 export function startFileWatcher(workspaceRoot: string) {
@@ -48,11 +50,11 @@ export function startFileWatcher(workspaceRoot: string) {
   console.log(`[file-watcher] watching ${workspaceRoot}`);
 }
 
-export function addFileViewer(ws: ServerWebSocket<any>) {
+export function addFileViewer(ws: WsLike) {
   viewers.add(ws);
 }
 
-export function removeFileViewer(ws: ServerWebSocket<any>) {
+export function removeFileViewer(ws: WsLike) {
   viewers.delete(ws);
 }
 
