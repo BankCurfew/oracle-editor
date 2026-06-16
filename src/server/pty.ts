@@ -1,21 +1,25 @@
 /**
- * PTY — attach to tmux session, stream via WebSocket (xterm.js protocol)
+ * PTY — attach to tmux session via real pseudo-terminal (node-pty)
  *
- * Pattern from maw-js office PTY streaming.
- * Spawns `tmux attach-session -t <name>` and pipes stdin/stdout over WebSocket.
+ * Bun.spawn with stdin:'pipe' creates a regular pipe, NOT a PTY.
+ * tmux detects non-TTY → doesn't echo keystrokes back.
+ * node-pty creates a real pseudo-terminal → tmux works correctly.
+ *
  * Binary frames = terminal data, JSON frames = control messages.
  */
-import type { ServerWebSocket, Subprocess } from "bun";
+import * as pty from "node-pty";
+import type { ServerWebSocket } from "bun";
+import type { IPty } from "node-pty";
 
 interface PtySession {
-  proc: Subprocess;
+  proc: IPty;
   target: string;
   viewers: Set<ServerWebSocket<any>>;
   cleanupTimer: ReturnType<typeof setTimeout> | null;
 }
 
 const sessions = new Map<string, PtySession>();
-const CLEANUP_DELAY_MS = 5_000; // kill PTY 5s after last viewer leaves
+const CLEANUP_DELAY_MS = 5_000;
 
 function findSession(ws: ServerWebSocket<any>): PtySession | undefined {
   for (const s of sessions.values()) {
@@ -23,7 +27,7 @@ function findSession(ws: ServerWebSocket<any>): PtySession | undefined {
   }
 }
 
-async function attach(ws: ServerWebSocket<any>, target: string, cols: number, rows: number) {
+function attach(ws: ServerWebSocket<any>, target: string, cols: number, rows: number) {
   const safe = target.replace(/[^a-zA-Z0-9\-_:.]/g, "");
   if (!safe) return;
 
@@ -41,54 +45,48 @@ async function attach(ws: ServerWebSocket<any>, target: string, cols: number, ro
     return;
   }
 
-  // Spawn new tmux attach
-  const cmd = `stty rows ${rows} cols ${cols} 2>/dev/null; TERM=xterm-256color tmux attach-session -t '${safe}'`;
-  const proc = Bun.spawn(["bash", "-c", cmd], {
-    stdin: "pipe",
-    stdout: "pipe",
-    stderr: "pipe",
-    env: { ...process.env, TERM: "xterm-256color" },
+  // Spawn real PTY → tmux attach
+  const proc = pty.spawn("tmux", ["attach-session", "-t", safe], {
+    name: "xterm-256color",
+    cols,
+    rows,
+    cwd: process.env.HOME || "/",
+    env: { ...process.env, TERM: "xterm-256color" } as Record<string, string>,
   });
 
   const session: PtySession = { proc, target: safe, viewers: new Set([ws]), cleanupTimer: null };
   sessions.set(safe, session);
 
-  // Stream stdout → all viewers
-  (async () => {
-    const reader = proc.stdout.getReader();
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        for (const v of session.viewers) {
-          try {
-            v.send(value);
-          } catch {
-            session.viewers.delete(v);
-          }
-        }
+  // Stream PTY output → all viewers
+  proc.onData((data: string) => {
+    const buf = Buffer.from(data);
+    for (const v of session.viewers) {
+      try {
+        v.send(buf);
+      } catch {
+        session.viewers.delete(v);
       }
-    } catch {}
-    // Process ended — cleanup
+    }
+  });
+
+  proc.onExit(() => {
     sessions.delete(safe);
     for (const v of session.viewers) {
       try {
         v.send(JSON.stringify({ type: "detached", target: safe, reason: "process-exit" }));
       } catch {}
     }
-  })();
+    console.log(`[pty] session ended: ${safe}`);
+  });
 
   ws.send(JSON.stringify({ type: "attached", target: safe, reused: false }));
-  console.log(`[pty] attached to tmux session: ${safe}`);
+  console.log(`[pty] attached to tmux session: ${safe} (${cols}x${rows})`);
 }
 
 function resize(ws: ServerWebSocket<any>, cols: number, rows: number) {
   const session = findSession(ws);
-  if (!session?.proc.stdin) return;
-  // Send tmux resize command
-  const resizeCmd = `tmux resize-window -t '${session.target}' -x ${cols} -y ${rows} 2>/dev/null\n`;
-  session.proc.stdin.write(resizeCmd);
-  session.proc.stdin.flush();
+  if (!session) return;
+  session.proc.resize(cols, rows);
 }
 
 function detach(ws: ServerWebSocket<any>) {
@@ -97,7 +95,6 @@ function detach(ws: ServerWebSocket<any>) {
   session.viewers.delete(ws);
 
   if (session.viewers.size === 0) {
-    // Schedule cleanup after delay
     session.cleanupTimer = setTimeout(() => {
       session.proc.kill();
       sessions.delete(session.target);
@@ -110,9 +107,8 @@ export function handlePtyMessage(ws: ServerWebSocket<any>, msg: string | Buffer)
   if (typeof msg !== "string") {
     // Binary → keystroke to PTY stdin
     const session = findSession(ws);
-    if (session?.proc.stdin) {
-      session.proc.stdin.write(msg as Buffer);
-      session.proc.stdin.flush();
+    if (session) {
+      session.proc.write(Buffer.from(msg as Buffer).toString());
     }
     return;
   }
