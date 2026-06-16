@@ -68,6 +68,7 @@ export function ChatTerminal() {
       fontSize: isMobile ? 10 : 13,
       lineHeight: isMobile ? 1.2 : 1,
       fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+      scrollback: 1000,
       theme: {
         background: "#09090b",
         foreground: "#fafafa",
@@ -75,6 +76,8 @@ export function ChatTerminal() {
         selectionBackground: "#3f3f4660",
       },
       allowProposedApi: true,
+      // Prevent horizontal scroll on mobile
+      overviewRuler: { width: 0 } as any,
     });
 
     const fit = new FitAddon();
