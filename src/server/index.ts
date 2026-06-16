@@ -31,6 +31,23 @@ app.get("/health", (c) =>
 // File API — /api/files, /api/file, /api/mkdir
 app.route("/api", createFileApi(WORKSPACE));
 
+// List available tmux sessions for Oracle selector
+app.get("/api/sessions", async (c) => {
+  try {
+    const proc = Bun.spawn(["tmux", "list-sessions", "-F", "#{session_name}\t#{session_windows}\t#{session_attached}"], {
+      stdout: "pipe", stderr: "pipe",
+    });
+    const text = await new Response(proc.stdout).text();
+    const sessions = text.trim().split("\n").filter(Boolean).map((line) => {
+      const [name, windows, attached] = line.split("\t");
+      return { name, windows: Number(windows), attached: Number(attached) > 0 };
+    });
+    return c.json({ sessions });
+  } catch {
+    return c.json({ sessions: [], error: "tmux not available" });
+  }
+});
+
 // Raw file serving — for iframe preview (serves actual file content with correct MIME)
 app.get("/api/file/raw", async (c) => {
   const reqPath = c.req.query("path");

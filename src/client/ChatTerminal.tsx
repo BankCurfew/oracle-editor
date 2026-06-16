@@ -44,6 +44,22 @@ export function ChatTerminal() {
     onClose: () => setWsConnected(false),
   });
 
+  // Reconnect PTY when oracle selection changes
+  const prevTarget = useRef(ptyTarget);
+  useEffect(() => {
+    if (prevTarget.current !== ptyTarget) {
+      prevTarget.current = ptyTarget;
+      const fit = fitRef.current;
+      const cols = fit ? termRef.current?.cols || 120 : 120;
+      const rows = fit ? termRef.current?.rows || 40 : 40;
+      send(JSON.stringify({ type: "detach" }));
+      setTimeout(() => {
+        send(JSON.stringify({ type: "attach", target: ptyTarget, cols, rows }));
+        termRef.current?.write(`\r\n\x1b[36m[switching to: ${ptyTarget}]\x1b[0m\r\n`);
+      }, 200);
+    }
+  }, [ptyTarget, send]);
+
   useEffect(() => {
     if (!containerRef.current || termRef.current) return;
 

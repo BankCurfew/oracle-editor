@@ -1,6 +1,7 @@
 import { ChatTerminal } from "./ChatTerminal";
 import { FileTree } from "./FileTree";
 import { PreviewPane } from "./PreviewPane";
+import { OracleSelector } from "./OracleSelector";
 import { useEditorStore, type MobileTab } from "./store";
 
 export function App() {
@@ -15,6 +16,7 @@ export function App() {
       <header className="flex items-center justify-between px-3 py-2 bg-zinc-900 border-b border-zinc-800 shrink-0">
         <div className="flex items-center gap-2">
           <h1 className="text-sm font-semibold text-zinc-100">Oracle Editor</h1>
+          <OracleSelector />
           <span className="text-xs text-zinc-500 hidden sm:inline">Visual Website Builder + AI Chat</span>
         </div>
         <div className="flex items-center gap-3 text-xs text-zinc-500">
