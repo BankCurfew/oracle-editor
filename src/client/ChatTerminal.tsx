@@ -131,8 +131,21 @@ export function ChatTerminal() {
         onClick={() => termRef.current?.focus()}
       />
 
+      {/* Quick action buttons */}
+      <div className="flex gap-1.5 px-2 pt-1.5 bg-zinc-900 border-t border-zinc-800 shrink-0">
+        {["/save", "/clear", "/recap"].map((cmd) => (
+          <button
+            key={cmd}
+            onClick={() => send(new TextEncoder().encode(cmd + "\r"))}
+            className="px-3 py-1 text-xs rounded-md bg-zinc-800 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-700 active:bg-zinc-600 min-h-[32px]"
+          >
+            {cmd}
+          </button>
+        ))}
+      </div>
+
       {/* Input box — ALWAYS visible, primary input method */}
-      <div className="flex items-center gap-2 px-2 py-2 bg-zinc-900 border-t border-zinc-800 shrink-0">
+      <div className="flex items-center gap-2 px-2 py-2 bg-zinc-900 shrink-0">
         <input
           ref={inputRef}
           type="text"
