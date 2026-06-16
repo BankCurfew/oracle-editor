@@ -20,7 +20,7 @@ import { resolve, extname } from "node:path";
 import { readFile } from "node:fs/promises";
 import { createFileApi } from "./file-api";
 import { startFileWatcher, addFileViewer, removeFileViewer } from "./file-watcher";
-import { handlePtyMessage, handlePtyClose } from "./pty";
+import { handlePtyMessage, handlePtyClose, getPtySessionCount } from "./pty";
 
 const PORT = Number(process.env.EDITOR_PORT || 3500);
 const WORKSPACE = process.env.EDITOR_WORKSPACE || process.cwd();
@@ -31,8 +31,15 @@ const app = new Hono();
 app.use("/*", cors({ origin: "*" }));
 
 // Health check
+let wsConnectionCount = 0;
 app.get("/health", (c) =>
-  c.json({ ok: true, workspace: WORKSPACE, uptime: process.uptime() })
+  c.json({
+    ok: true,
+    workspace: WORKSPACE,
+    uptime: process.uptime(),
+    ptySessions: getPtySessionCount(),
+    wsConnections: wsConnectionCount,
+  })
 );
 
 // File API — /api/files, /api/file, /api/mkdir
@@ -100,7 +107,9 @@ httpServer.on("upgrade", (req, socket, head) => {
 });
 
 wss.on("connection", (ws) => {
+  wsConnectionCount++;
   const type = (ws as any)._editorType as "pty" | "files";
+  console.log(`[ws] +connect (${type}) — total: ${wsConnectionCount}`);
 
   if (type === "files") {
     addFileViewer(ws as any);
@@ -120,6 +129,7 @@ wss.on("connection", (ws) => {
   });
 
   ws.on("close", () => {
+    wsConnectionCount = Math.max(0, wsConnectionCount - 1);
     if (type === "pty") {
       handlePtyClose(ws as any);
     } else {

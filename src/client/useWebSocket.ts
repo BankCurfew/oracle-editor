@@ -7,44 +7,87 @@ interface UseWebSocketOptions {
   onMessage: MessageHandler;
   onOpen?: () => void;
   onClose?: () => void;
-  reconnectMs?: number;
   binaryType?: BinaryType;
 }
+
+const RECONNECT_BASE_MS = 1000;
+const RECONNECT_MAX_MS = 30000;
+const MAX_RETRIES = 10;
 
 export function useWebSocket({
   url,
   onMessage,
   onOpen,
   onClose,
-  reconnectMs = 3000,
   binaryType = "arraybuffer",
 }: UseWebSocketOptions) {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout>>();
+  const retriesRef = useRef(0);
+  // Store callbacks in refs to avoid reconnect loops from dep changes
+  const onMessageRef = useRef(onMessage);
+  const onOpenRef = useRef(onOpen);
+  const onCloseRef = useRef(onClose);
+  onMessageRef.current = onMessage;
+  onOpenRef.current = onOpen;
+  onCloseRef.current = onClose;
 
   const connect = useCallback(() => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) return;
+    // Close any existing socket first
+    if (wsRef.current) {
+      try { wsRef.current.close(); } catch {}
+      wsRef.current = null;
+    }
+
+    if (retriesRef.current >= MAX_RETRIES) {
+      console.warn(`[ws] ${url} — max retries (${MAX_RETRIES}) reached, stopping`);
+      return;
+    }
 
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const fullUrl = url.startsWith("/") ? `${protocol}//${window.location.host}${url}` : url;
-    const ws = new WebSocket(fullUrl);
-    ws.binaryType = binaryType;
 
-    ws.onopen = () => onOpen?.();
-    ws.onclose = () => {
-      onClose?.();
-      reconnectTimer.current = setTimeout(connect, reconnectMs);
-    };
-    ws.onmessage = (e) => onMessage(e.data);
+    try {
+      const ws = new WebSocket(fullUrl);
+      ws.binaryType = binaryType;
 
-    wsRef.current = ws;
-  }, [url, onMessage, onOpen, onClose, reconnectMs, binaryType]);
+      ws.onopen = () => {
+        retriesRef.current = 0; // reset on success
+        onOpenRef.current?.();
+      };
+
+      ws.onclose = () => {
+        wsRef.current = null;
+        onCloseRef.current?.();
+        // Exponential backoff
+        const delay = Math.min(RECONNECT_BASE_MS * Math.pow(2, retriesRef.current), RECONNECT_MAX_MS);
+        retriesRef.current++;
+        reconnectTimer.current = setTimeout(connect, delay);
+      };
+
+      ws.onerror = () => {
+        // onclose will fire after onerror — don't double-reconnect
+      };
+
+      ws.onmessage = (e) => onMessageRef.current(e.data);
+      wsRef.current = ws;
+    } catch {
+      // WebSocket constructor can throw if too many connections
+      const delay = Math.min(RECONNECT_BASE_MS * Math.pow(2, retriesRef.current), RECONNECT_MAX_MS);
+      retriesRef.current++;
+      reconnectTimer.current = setTimeout(connect, delay);
+    }
+  }, [url, binaryType]); // stable deps only
 
   useEffect(() => {
     connect();
     return () => {
       clearTimeout(reconnectTimer.current);
-      wsRef.current?.close();
+      retriesRef.current = MAX_RETRIES; // prevent reconnect during cleanup
+      if (wsRef.current) {
+        try { wsRef.current.close(); } catch {}
+        wsRef.current = null;
+      }
     };
   }, [connect]);
 

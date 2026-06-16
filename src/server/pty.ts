@@ -21,7 +21,13 @@ interface PtySession {
 }
 
 const sessions = new Map<string, PtySession>();
-const CLEANUP_DELAY_MS = 5_000;
+const CLEANUP_DELAY_MS = 1_000; // fast cleanup to free PTY resources
+const MAX_SESSIONS = 5;
+
+/** Get current session count for health reporting */
+export function getPtySessionCount(): number {
+  return sessions.size;
+}
 
 function findSession(ws: WsLike): PtySession | undefined {
   for (const s of sessions.values()) {
@@ -35,7 +41,7 @@ function attach(ws: WsLike, target: string, cols: number, rows: number) {
 
   detach(ws);
 
-  // Join existing PTY session for this target
+  // Join existing PTY session for this target (doesn't count as new)
   if (sessions.has(safe)) {
     const session = sessions.get(safe)!;
     session.viewers.add(ws);
@@ -44,6 +50,13 @@ function attach(ws: WsLike, target: string, cols: number, rows: number) {
       session.cleanupTimer = null;
     }
     ws.send(JSON.stringify({ type: "attached", target: safe, reused: true }));
+    return;
+  }
+
+  // Check session limit before spawning
+  if (sessions.size >= MAX_SESSIONS) {
+    console.warn(`[pty] max sessions (${MAX_SESSIONS}) reached, rejecting: ${safe}`);
+    ws.send(JSON.stringify({ type: "error", message: `Max ${MAX_SESSIONS} sessions reached` }));
     return;
   }
 
