@@ -174,10 +174,13 @@ export function VisualEditor({
     const fullHtml = `<!DOCTYPE html>\n<html>\n<head>\n<style>\n${css}\n</style>\n</head>\n<body>\n${html}\n</body>\n</html>`;
 
     try {
+      // Extract path from fileUrl query param
+      const urlObj = new URL(fileUrl, window.location.origin);
+      const filePath = urlObj.searchParams.get("path") || "index.html";
       const res = await fetch(saveUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: fullHtml }),
+        body: JSON.stringify({ path: filePath, content: fullHtml }),
       });
       if (res.ok) {
         setDirty(false);

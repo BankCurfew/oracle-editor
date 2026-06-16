@@ -1,10 +1,11 @@
 import { useEditorStore } from "./store";
+import { VisualEditor } from "./VisualEditor";
 
 export function PreviewPane() {
   const selectedFile = useEditorStore((s) => s.selectedFile);
   const previewKey = useEditorStore((s) => s.previewKey);
 
-  const isPreviewable = selectedFile?.match(/\.(html?|htm|svg)$/i);
+  const isHtml = selectedFile?.match(/\.(html?|htm)$/i);
   const isImage = selectedFile?.match(/\.(png|jpe?g|gif|webp|svg)$/i);
 
   return (
@@ -20,13 +21,12 @@ export function PreviewPane() {
           <div className="flex items-center justify-center h-full bg-zinc-950">
             <p className="text-zinc-600 text-sm">Select a file to preview</p>
           </div>
-        ) : isPreviewable ? (
-          <iframe
+        ) : isHtml ? (
+          <VisualEditor
             key={`${selectedFile}-${previewKey}`}
-            src={`/api/file/raw?path=${encodeURIComponent(selectedFile)}`}
-            className="w-full h-full border-0"
-            title="Preview"
-            sandbox="allow-scripts allow-same-origin"
+            fileUrl={`/api/file/raw?path=${encodeURIComponent(selectedFile)}`}
+            saveUrl={`/api/file`}
+            onChange={() => {}}
           />
         ) : isImage ? (
           <div className="flex items-center justify-center h-full bg-zinc-950 p-4">
