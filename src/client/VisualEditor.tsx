@@ -1,62 +1,68 @@
 /**
- * VisualEditor — GrapesJS canvas for drag & drop editing
+ * VisualEditor — GrapesJS with full plugin suite + panels
  *
- * Usage: <VisualEditor fileUrl="/api/file?path=index.html" />
- *
- * Features:
- * - Load HTML from file API → display in GrapesJS canvas
- * - Visual drag & drop editing
- * - Properties panel: font, color, size, spacing
- * - Toggle: visual edit / code view / preview
- * - Save back to file via API
+ * Plugins: preset-webpage, blocks-basic, plugin-forms, navbar, tabs, custom-code
+ * Layout: blocks left, canvas center, styles/layers right (managed by GrapesJS panels)
  */
 import { useEffect, useRef, useState, useCallback } from "react";
 import grapesjs, { Editor } from "grapesjs";
 import "grapesjs/dist/css/grapes.min.css";
+import gjsPresetWebpage from "grapesjs-preset-webpage";
+import gjsBlocksBasic from "grapesjs-blocks-basic";
+import gjsPluginForms from "grapesjs-plugin-forms";
+import gjsNavbar from "grapesjs-navbar";
+import gjsTabs from "grapesjs-tabs";
+import gjsCustomCode from "grapesjs-custom-code";
 
 export interface VisualEditorProps {
-  /** API endpoint to load HTML content */
   fileUrl: string;
-  /** API endpoint to save HTML content */
   saveUrl?: string;
-  /** Callback when content changes */
   onChange?: (html: string, css: string) => void;
-  /** Height of the editor canvas */
-  height?: string;
 }
 
-type ViewMode = "edit" | "code" | "preview";
-
-export function VisualEditor({
-  fileUrl,
-  saveUrl,
-  onChange,
-  height = "100%",
-}: VisualEditorProps) {
+export function VisualEditor({ fileUrl, saveUrl, onChange }: VisualEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const gjsRef = useRef<Editor | null>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>("edit");
   const [saving, setSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
 
-  // Initialize GrapesJS
   useEffect(() => {
     if (!editorRef.current || gjsRef.current) return;
 
     const editor = grapesjs.init({
       container: editorRef.current,
-      height,
+      height: "100%",
       width: "auto",
       fromElement: false,
-      storageManager: false, // We handle saving ourselves
-      panels: { defaults: [] }, // Custom panels below
+      storageManager: false,
+      plugins: [
+        gjsPresetWebpage,
+        gjsBlocksBasic,
+        gjsPluginForms,
+        gjsNavbar,
+        gjsTabs,
+        gjsCustomCode,
+      ],
+      pluginsOpts: {
+        [gjsPresetWebpage as any]: {
+          modalImportTitle: "Import HTML",
+          modalImportButton: "Import",
+          modalImportLabel: "",
+        },
+        [gjsBlocksBasic as any]: { flexGrid: true },
+        [gjsPluginForms as any]: {},
+        [gjsNavbar as any]: {},
+        [gjsTabs as any]: {},
+        [gjsCustomCode as any]: {},
+      },
       canvas: {
         styles: [
           "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sarabun:wght@400;600;700&display=swap",
         ],
       },
       styleManager: {
+        appendTo: "#styles-container",
         sectors: [
           {
             name: "Typography",
@@ -65,57 +71,54 @@ export function VisualEditor({
               { type: "select", property: "font-family", options: [
                 { id: "Inter, sans-serif", label: "Inter" },
                 { id: "Sarabun, sans-serif", label: "Sarabun" },
-                { id: "LINESeedSansTH, sans-serif", label: "LINESeedSansTH" },
+                { id: "Arial, sans-serif", label: "Arial" },
                 { id: "serif", label: "Serif" },
                 { id: "monospace", label: "Monospace" },
               ]},
               { type: "number", property: "font-size", units: ["px", "em", "rem"], min: 8, max: 120 },
               { type: "number", property: "font-weight", min: 100, max: 900, step: 100 },
               { type: "color", property: "color" },
-              { type: "number", property: "line-height", units: ["px", "em", ""], min: 0, step: 0.1 },
-              { type: "number", property: "letter-spacing", units: ["px", "em"], min: -5, max: 20 },
               { type: "select", property: "text-align", options: [
                 { id: "left", label: "Left" },
                 { id: "center", label: "Center" },
                 { id: "right", label: "Right" },
-                { id: "justify", label: "Justify" },
               ]},
             ],
           },
           {
-            name: "Spacing",
+            name: "Layout",
             properties: [
               { type: "composite", property: "margin", properties: [
-                { type: "number", property: "margin-top", units: ["px", "em", "%"] },
-                { type: "number", property: "margin-right", units: ["px", "em", "%"] },
-                { type: "number", property: "margin-bottom", units: ["px", "em", "%"] },
-                { type: "number", property: "margin-left", units: ["px", "em", "%"] },
+                { type: "number", property: "margin-top", units: ["px", "%"] },
+                { type: "number", property: "margin-right", units: ["px", "%"] },
+                { type: "number", property: "margin-bottom", units: ["px", "%"] },
+                { type: "number", property: "margin-left", units: ["px", "%"] },
               ]},
               { type: "composite", property: "padding", properties: [
-                { type: "number", property: "padding-top", units: ["px", "em", "%"] },
-                { type: "number", property: "padding-right", units: ["px", "em", "%"] },
-                { type: "number", property: "padding-bottom", units: ["px", "em", "%"] },
-                { type: "number", property: "padding-left", units: ["px", "em", "%"] },
+                { type: "number", property: "padding-top", units: ["px", "%"] },
+                { type: "number", property: "padding-right", units: ["px", "%"] },
+                { type: "number", property: "padding-bottom", units: ["px", "%"] },
+                { type: "number", property: "padding-left", units: ["px", "%"] },
               ]},
             ],
           },
           {
-            name: "Background",
+            name: "Appearance",
             properties: [
               { type: "color", property: "background-color" },
               { type: "number", property: "border-radius", units: ["px", "%"] },
               { type: "number", property: "opacity", min: 0, max: 1, step: 0.05 },
-            ],
-          },
-          {
-            name: "Size",
-            properties: [
-              { type: "number", property: "width", units: ["px", "%", "vw", "auto"] },
-              { type: "number", property: "height", units: ["px", "%", "vh", "auto"] },
-              { type: "number", property: "max-width", units: ["px", "%"] },
+              { type: "number", property: "width", units: ["px", "%", "vw"] },
+              { type: "number", property: "height", units: ["px", "%", "vh"] },
             ],
           },
         ],
+      },
+      blockManager: {
+        appendTo: "#blocks-container",
+      },
+      layerManager: {
+        appendTo: "#layers-container",
       },
       deviceManager: {
         devices: [
@@ -130,15 +133,11 @@ export function VisualEditor({
     editor.on("change:changesCount", () => {
       setDirty(true);
       if (onChange) {
-        const html = editor.getHtml();
-        const css = editor.getCss() || "";
-        onChange(html, css);
+        onChange(editor.getHtml(), editor.getCss() || "");
       }
     });
 
     gjsRef.current = editor;
-
-    // Load initial content
     loadContent(editor);
 
     return () => {
@@ -147,14 +146,10 @@ export function VisualEditor({
     };
   }, []);
 
-  // Load HTML from file API
   async function loadContent(editor: Editor) {
     try {
       const res = await fetch(fileUrl);
-      if (!res.ok) {
-        console.error(`[VisualEditor] Failed to load: ${res.status}`);
-        return;
-      }
+      if (!res.ok) return;
       const html = await res.text();
       editor.setComponents(html);
       setDirty(false);
@@ -163,18 +158,14 @@ export function VisualEditor({
     }
   }
 
-  // Save HTML back to file API
   const handleSave = useCallback(async () => {
     const editor = gjsRef.current;
     if (!editor || !saveUrl) return;
-
     setSaving(true);
     const html = editor.getHtml();
     const css = editor.getCss() || "";
     const fullHtml = `<!DOCTYPE html>\n<html>\n<head>\n<style>\n${css}\n</style>\n</head>\n<body>\n${html}\n</body>\n</html>`;
-
     try {
-      // Extract path from fileUrl query param
       const urlObj = new URL(fileUrl, window.location.origin);
       const filePath = urlObj.searchParams.get("path") || "index.html";
       const res = await fetch(saveUrl, {
@@ -190,109 +181,74 @@ export function VisualEditor({
       console.error("[VisualEditor] Save error:", err);
     }
     setSaving(false);
-  }, [saveUrl]);
+  }, [saveUrl, fileUrl]);
 
-  // Toggle view modes
-  const handleViewMode = useCallback((mode: ViewMode) => {
-    const editor = gjsRef.current;
-    if (!editor) return;
-
-    setViewMode(mode);
-
-    switch (mode) {
-      case "code":
-        // Open code editor panel
-        editor.runCommand("open-code");
-        break;
-      case "preview":
-        editor.runCommand("preview");
-        break;
-      case "edit":
-        editor.stopCommand("preview");
-        break;
-    }
+  // Device toggle
+  const setDevice = useCallback((name: string) => {
+    gjsRef.current?.setDevice(name);
   }, []);
 
-  // Keyboard shortcut: Ctrl+S to save
+  // Undo/Redo
+  const undo = useCallback(() => gjsRef.current?.UndoManager.undo(), []);
+  const redo = useCallback(() => gjsRef.current?.UndoManager.redo(), []);
+
+  // Ctrl+S
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === "s") {
         e.preventDefault();
         handleSave();
       }
+      if ((e.ctrlKey || e.metaKey) && e.key === "z") {
+        e.preventDefault();
+        if (e.shiftKey) redo(); else undo();
+      }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [handleSave]);
+  }, [handleSave, undo, redo]);
 
   return (
-    <div className="visual-editor" style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+    <div className="flex flex-col h-full">
       {/* Toolbar */}
-      <div style={{
-        display: "flex",
-        alignItems: "center",
-        gap: "8px",
-        padding: "6px 12px",
-        borderBottom: "1px solid #e2e8f0",
-        background: "#f8fafc",
-        fontSize: "13px",
-      }}>
-        {/* View mode toggles */}
-        {(["edit", "code", "preview"] as ViewMode[]).map((mode) => (
-          <button
-            key={mode}
-            onClick={() => handleViewMode(mode)}
-            style={{
-              padding: "4px 12px",
-              borderRadius: "6px",
-              border: "1px solid",
-              borderColor: viewMode === mode ? "#3b82f6" : "#e2e8f0",
-              background: viewMode === mode ? "#eff6ff" : "white",
-              color: viewMode === mode ? "#2563eb" : "#64748b",
-              cursor: "pointer",
-              fontWeight: viewMode === mode ? 600 : 400,
-              fontSize: "12px",
-            }}
-          >
-            {mode === "edit" ? "Visual" : mode === "code" ? "Code" : "Preview"}
-          </button>
+      <div className="flex items-center gap-2 px-3 py-1.5 border-b border-zinc-200 bg-zinc-50 shrink-0 text-xs">
+        <button onClick={undo} className="px-2 py-1 rounded hover:bg-zinc-200" title="Undo (Ctrl+Z)">Undo</button>
+        <button onClick={redo} className="px-2 py-1 rounded hover:bg-zinc-200" title="Redo (Ctrl+Shift+Z)">Redo</button>
+        <span className="w-px h-4 bg-zinc-300" />
+        {["Desktop", "Tablet", "Mobile"].map((d) => (
+          <button key={d} onClick={() => setDevice(d)} className="px-2 py-1 rounded hover:bg-zinc-200">{d}</button>
         ))}
-
-        <div style={{ flex: 1 }} />
-
-        {/* Save status */}
-        {lastSaved && (
-          <span style={{ color: "#94a3b8", fontSize: "11px" }}>
-            Saved {lastSaved}
-          </span>
-        )}
-        {dirty && (
-          <span style={{ color: "#f59e0b", fontSize: "11px" }}>Unsaved changes</span>
-        )}
-
-        {/* Save button */}
-        {saveUrl && (
-          <button
-            onClick={handleSave}
-            disabled={saving || !dirty}
-            style={{
-              padding: "4px 16px",
-              borderRadius: "6px",
-              border: "none",
-              background: dirty ? "#3b82f6" : "#e2e8f0",
-              color: dirty ? "white" : "#94a3b8",
-              cursor: dirty ? "pointer" : "default",
-              fontWeight: 500,
-              fontSize: "12px",
-            }}
-          >
-            {saving ? "Saving..." : "Save"}
-          </button>
-        )}
+        <div className="flex-1" />
+        {lastSaved && <span className="text-zinc-400">Saved {lastSaved}</span>}
+        {dirty && <span className="text-amber-500">Unsaved</span>}
+        <button
+          onClick={handleSave}
+          disabled={saving || !dirty}
+          className={`px-3 py-1 rounded text-white ${dirty ? "bg-blue-500 hover:bg-blue-600" : "bg-zinc-300"}`}
+        >
+          {saving ? "Saving..." : "Save"}
+        </button>
       </div>
 
-      {/* GrapesJS Canvas */}
-      <div ref={editorRef} style={{ flex: 1 }} />
+      {/* Editor body: blocks | canvas | styles */}
+      <div className="flex flex-1 min-h-0">
+        {/* Left: Blocks */}
+        <div className="w-[200px] border-r border-zinc-200 overflow-y-auto bg-zinc-50 hidden md:block">
+          <div className="p-2 text-xs font-medium text-zinc-500 border-b border-zinc-200">Blocks</div>
+          <div id="blocks-container" />
+        </div>
+
+        {/* Center: Canvas */}
+        <div ref={editorRef} className="flex-1 min-w-0" />
+
+        {/* Right: Styles + Layers */}
+        <div className="w-[240px] border-l border-zinc-200 overflow-y-auto bg-zinc-50 hidden lg:block">
+          <div className="p-2 text-xs font-medium text-zinc-500 border-b border-zinc-200">Styles</div>
+          <div id="styles-container" />
+          <div className="p-2 text-xs font-medium text-zinc-500 border-b border-zinc-200 mt-2">Layers</div>
+          <div id="layers-container" />
+        </div>
+      </div>
     </div>
   );
 }
