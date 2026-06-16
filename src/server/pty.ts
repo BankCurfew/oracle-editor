@@ -119,22 +119,28 @@ function detach(ws: WsLike) {
 }
 
 export function handlePtyMessage(ws: WsLike, msg: string | Buffer) {
-  if (typeof msg !== "string") {
-    // Binary → keystroke to PTY stdin
-    const session = findSession(ws);
-    if (session) {
-      session.proc.write(Buffer.from(msg as Buffer).toString());
-    }
-    return;
+  // Convert Buffer to string for unified handling
+  const text = typeof msg === "string" ? msg : Buffer.from(msg).toString("utf-8");
+  console.log(`[pty] msg: type=${typeof msg} len=${text.length} preview=${text.substring(0, 80)}`);
+
+  // Try JSON control message first
+  if (text.startsWith("{")) {
+    try {
+      const data = JSON.parse(text);
+      if (data.type === "attach") {
+        attach(ws, data.target, data.cols || 120, data.rows || 40);
+        return;
+      }
+      if (data.type === "resize") { resize(ws, data.cols, data.rows); return; }
+      if (data.type === "detach") { detach(ws); return; }
+    } catch {}
   }
 
-  // JSON control message
-  try {
-    const data = JSON.parse(msg);
-    if (data.type === "attach") attach(ws, data.target, data.cols || 120, data.rows || 40);
-    else if (data.type === "resize") resize(ws, data.cols, data.rows);
-    else if (data.type === "detach") detach(ws);
-  } catch {}
+  // Not JSON → keystroke to PTY stdin
+  const session = findSession(ws);
+  if (session) {
+    session.proc.write(text);
+  }
 }
 
 export function handlePtyClose(ws: WsLike) {
